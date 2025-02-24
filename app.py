@@ -4,11 +4,16 @@ from flask_bcrypt import Bcrypt
 import os
 
 # Initialize Flask app
-app = Flask(_name_)
+app = Flask(__name__)
 
 # Set database path dynamically
-basedir = os.path.abspath(os.path.dirname(_file_))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'users.db')
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'users.db')
+
+# Debugging: Check the exact path Flask is using for the database
+print(f"Database file location: {db_path}")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Avoids warning
 
 # Secret key (use environment variable in production)
@@ -27,14 +32,12 @@ class User(db.Model):
 
 # Ensure database tables exist
 with app.app_context():
-    db.create_all()
+    db.create_all()  # This ensures the tables are created in the database file if they don't already exist
 
 # Home route
 @app.route('/')
 def home():
     if 'user_id' in session:
-        
-
         user = User.query.get(session['user_id'])
         if user:
             return render_template('index.html', user=user)
@@ -66,10 +69,17 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-        confirm_password = request.form['confirm_password']
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        # Debugging log for received form data
+        print(f"Received Form Data: Username={username}, Email={email}, Password={password}, Confirm={confirm_password}")
+
+        if not username or not email or not password or not confirm_password:
+            flash("All fields are required!", "danger")
+            return redirect(url_for('register'))
 
         if password != confirm_password:
             flash('Passwords do not match!', 'danger')
@@ -83,14 +93,15 @@ def register():
         try:
             hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
             new_user = User(username=username, email=email, password=hashed_password)
+
             db.session.add(new_user)
-            db.session.commit()
+            db.session.commit()  # Ensure commit happens to store the new user
 
             flash('Registration successful! Please log in.', 'success')
             return redirect(url_for('login'))
         except Exception as e:
-            db.session.rollback()  # Rollback in case of an error
-            flash(f"An error occurred: {str(e)}", 'danger')
+            db.session.rollback()  # Rollback in case of error
+            flash(f"Database error: {str(e)}", 'danger')
 
     return render_template('register.html')
 
@@ -98,9 +109,12 @@ def register():
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
-    flash('Logged out successfully.', 'info')
+    flash("You have been logged out.", "info")
     return redirect(url_for('login'))
 
 # Run the app
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(debug=True)
+  
+    
+       
